@@ -1,4 +1,5 @@
 #include <iostream>
+#include <vector>
 #include <math.h>
 
 using namespace std;
@@ -23,7 +24,11 @@ public:
 	//! \return the chriplet value at time fTime
 	double value(double fTime) const;
 
-public
+	//! this will be used to render the 2d image freq x time
+	//! still not implemented
+	double value2d(double fTime, double fFrequency) const;
+
+public:
 	double m_fAmplitude;
 
 	// gaussian parameters {{
@@ -48,15 +53,22 @@ public
 	double m_fc;
 
 	// }} the chirplet parameters
-}
+};
+
+typedef vector<CGaussianChirplet> CGaussianChirpletVector;
 
 double CGaussianChirplet::value(double fTime) const
 {
 	return m_fAmplitude*exp(-square((fTime - m_fCentralTime)/m_fSigma))*cos((m_fw + m_fc*fTime)*fTime + m_fPhase);
 }
 
+double CGaussianChirplet::value2d(double fTime, double fFrequency) const
+{
+	return 0;
+}
+
 int main()
 {
-    cout << "Hello world!" << endl;
+    // cout << "Hello world!" << endl;
     return 0;
 }
