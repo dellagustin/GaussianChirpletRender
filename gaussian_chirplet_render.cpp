@@ -2,8 +2,11 @@
 #include <vector>
 #include <math.h>
 #include <memory.h>
+#include <pngwriter.h>
 
 using namespace std;
+
+#define access_mtx_value(mtx, x, y, xsize) mtx[y*xsize + x]
 
 // helper functions
 
@@ -70,6 +73,49 @@ double CGaussianChirplet::value2d(double fTime, double fFrequency) const
 	return 0;
 }
 
+void render_image(unsigned int nTimeSamples, unsigned int nFrequencySamples, const double* pfImage, const char *pcszOutFile)
+{
+	pngwriter pngImage((int)nTimeSamples, (int)nFrequencySamples, 1.0, pcszOutFile);
+
+	unsigned int i, j;
+
+	for(i = 0; i < nTimeSamples; i++)
+	{
+		for(j = 0; j < nFrequencySamples; j++)
+		{
+			double fValue = access_mtx_value(pfImage, i, j, nTimeSamples);
+			pngImage.plot((int)i, (int)j, fValue, fValue, fValue);
+		}
+	}
+
+	pngImage.close();
+}
+
+void normalize(double* pfValues, unsigned int nSize)
+{
+	int i;
+	double fBuffer = 0.0;
+
+	// find the max value
+	for(i = 0; i < nSize; i++)
+	{
+		if(pfValues[i] > fBuffer)
+		{
+			fBuffer = pfValues[i];
+		}
+	}
+
+	if(fBuffer != 0.0)
+	{
+		fBuffer = 1.0/fBuffer;
+
+		for(i = 0; i < nSize; i++)
+		{
+			pfValues[i] *= fBuffer;
+		}
+	}
+}
+
 int main()
 {
     // cout << "Hello world!" << endl;
@@ -84,18 +130,25 @@ int main()
 
 	CGaussianChirpletVector gcvector;
 
+	CGaussianChirpletVector::iterator it;
+
+	// it = gcvector.begin();
+
+	// gcvector.insert( ,it);
+
+
 	// TODO: here you need to read the atoms and fill gcvector
 
-    double *pfBitmap = new double[nTimeSamples*nFrequencySamples];
+    double *pfImage = new double[nTimeSamples*nFrequencySamples];
 
     // reset the bitmap values
-    memset(pfBitmap, 0, nTimeSamples*nFrequencySamples*sizeof(double));
+    memset(pfImage, 0, nTimeSamples*nFrequencySamples*sizeof(double));
 
     // steps in time
     double fTimeStep = (fTimeMax - fTimeMin)/((double)nTimeSamples);
 
     // steps in frequency
-    double fFreqStep = (fTimeMax - fTimeMin)/((double)nTimeFrequency);
+    double fFreqStep = (fFreqMax - fFreqMin)/((double)nFrequencySamples);
 
 	// gaussian chirplet loop
     for(k = 0; k < gcvector.size(); k++)
@@ -112,10 +165,14 @@ int main()
 				// fTime =
 				// fFreq =
 
-				pfBitmap[j*nFrequencySamples + i] = gcvector[i].value2d(fTime, fFreq);
+				access_mtx_value(pfImage, i, j, nTimeSamples) = gcvector[i].value2d(fTime, fFreq);
 			}
 		}
 	}
+
+	normalize(pfImage, nTimeSamples*nFrequencySamples);
+
+	render_image(nTimeSamples, nFrequencySamples, pfImage, "out.png");
 
 	// TODO: here you need to write the bitmap
 
