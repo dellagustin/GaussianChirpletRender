@@ -63,6 +63,11 @@ public:
 
 typedef vector<CGaussianChirplet> CGaussianChirpletVector;
 
+CGaussianChirplet::CGaussianChirplet()
+{
+
+}
+
 double CGaussianChirplet::value(double fTime) const
 {
 	return m_fAmplitude*exp(-square((fTime - m_fCentralTime)/m_fSigma))*cos((m_fw + m_fc*fTime)*fTime + m_fPhase);
@@ -70,7 +75,7 @@ double CGaussianChirplet::value(double fTime) const
 
 double CGaussianChirplet::value2d(double fTime, double fFrequency) const
 {
-	return 0;
+	return m_fAmplitude*exp(-(square((fTime - m_fCentralTime)/m_fSigma) + square((fFrequency - (m_fw + m_fc*((fTime - m_fCentralTime))))*m_fSigma)));
 }
 
 void render_image(unsigned int nTimeSamples, unsigned int nFrequencySamples, const double* pfImage, const char *pcszOutFile)
@@ -93,7 +98,7 @@ void render_image(unsigned int nTimeSamples, unsigned int nFrequencySamples, con
 
 void normalize(double* pfValues, unsigned int nSize)
 {
-	int i;
+	unsigned int i;
 	double fBuffer = 0.0;
 
 	// find the max value
@@ -116,26 +121,63 @@ void normalize(double* pfValues, unsigned int nSize)
 	}
 }
 
-int main()
+int main(int argc, const char *argv[])
 {
     // cout << "Hello world!" << endl;
+
+    if(argc < 1)
+		return 0;
+
     unsigned int i, j, k;
     unsigned int nTimeSamples = 800;
     unsigned int nFrequencySamples = 480;
     // unsigned int nSamplesShift = 1;
     double fTimeMin = 0.0;
     double fTimeMax = 8.0;
-	double fFreqMin = 2.0;
-    double fFreqMax = 64.0;
+	double fFreqMin = 0.0;
+    double fFreqMax = 32.0;
 
 	CGaussianChirpletVector gcvector;
+
+	FILE* pInFile = fopen(argv[1], "rt");
+
+	if(!pInFile)
+	{
+		fprintf(stdout, "Impossible to open input file.\n");
+	}
 
 	CGaussianChirpletVector::iterator it;
 
 	// it = gcvector.begin();
 
-	// gcvector.insert( ,it);
+	CGaussianChirplet gchirp;
 
+	float frbuffer[4];
+	int nrbuffer[2];
+
+	// while(fscanf(pInFile, "%e %e %e %e %e %e", &gchirp.m_fAmplitude, &gchirp.m_fSigma, &gchirp.m_fCentralTime, &gchirp.m_fw, &dummy[0], &gchirp.m_fc )!=EOF)
+	while(fscanf(pInFile, "%e %d %d %e %e %e", &frbuffer[0], &nrbuffer[0], &nrbuffer[1], &frbuffer[1], &frbuffer[2], &frbuffer[3] )!=EOF)
+	{
+		gchirp.m_fSigma = ((double)nrbuffer[0])/128.0;;
+		gchirp.m_fCentralTime = ((double)nrbuffer[1])/128.0; // is sampling 128? probably
+		gchirp.m_fAmplitude = 1.0; // lets pretend everybody is equal for tests
+		gchirp.m_fw = 128*frbuffer[1]/6.8;
+		gchirp.m_fc = 128*128*frbuffer[3]/6.8;
+
+		/*
+		CGaussianChirplet test_chirp;
+
+		test_chirp.m_fAmplitude = 1.0;
+		test_chirp.m_fw = 32.0;
+		test_chirp.m_fc = 10;
+		test_chirp.m_fCentralTime = 4.0;
+		test_chirp.m_fSigma = 1.0;
+		*/
+
+		gcvector.push_back(gchirp);
+	}
+
+	fclose(pInFile);
 
 	// TODO: here you need to read the atoms and fill gcvector
 
@@ -165,14 +207,14 @@ int main()
 				// fTime =
 				// fFreq =
 
-				access_mtx_value(pfImage, i, j, nTimeSamples) = gcvector[i].value2d(fTime, fFreq);
+				access_mtx_value(pfImage, i, j, nTimeSamples) += gcvector[k].value2d(fTime, fFreq);
 			}
 		}
 	}
 
 	normalize(pfImage, nTimeSamples*nFrequencySamples);
 
-	render_image(nTimeSamples, nFrequencySamples, pfImage, "out.png");
+	render_image(nTimeSamples, nFrequencySamples, pfImage, argv[2]);
 
 	// TODO: here you need to write the bitmap
 
