@@ -8,6 +8,18 @@ using namespace std;
 
 #define access_mtx_value(mtx, x, y, xsize) mtx[y*xsize + x]
 
+#ifndef BOOL
+#define BOOL int
+#endif
+
+#ifndef TRUE
+#define TRUE -1
+#endif
+
+#ifndef FALSE
+#define FALSE 0
+#endif
+
 // helper functions
 
 double square(double fValue);
@@ -16,6 +28,8 @@ inline double square(double fValue)
 {
 	return fValue*fValue;
 }
+
+
 
 //! \brief This class represents a gaussian chirplet
 class CGaussianChirplet
@@ -78,25 +92,38 @@ double CGaussianChirplet::value2d(double fTime, double fFrequency) const
 	return m_fAmplitude*exp(-(square((fTime - m_fCentralTime)/m_fSigma) + square((fFrequency - (m_fw + m_fc*((fTime - m_fCentralTime))))*m_fSigma)));
 }
 
-void render_image(unsigned int nTimeSamples, unsigned int nFrequencySamples, const double* pfImage, const char *pcszOutFile)
+void render_image(unsigned int uiTimeSamples, unsigned int uiFrequencySamples, const double* pfImage, const char *pcszOutFile, BOOL bInverse = TRUE);
+
+void render_image(unsigned int uiTimeSamples, unsigned int uiFrequencySamples, const double* pfImage, const char *pcszOutFile, BOOL bInverse)
 {
-	pngwriter pngImage((int)nTimeSamples, (int)nFrequencySamples, 1.0, pcszOutFile);
+	pngwriter pngImage((int)uiTimeSamples, (int)uiFrequencySamples, 1.0, pcszOutFile);
 
 	unsigned int i, j;
 
-	for(i = 0; i < nTimeSamples; i++)
+	for(i = 0; i < uiTimeSamples; i++)
 	{
-		for(j = 0; j < nFrequencySamples; j++)
+		for(j = 0; j < uiFrequencySamples; j++)
 		{
-			double fValue = access_mtx_value(pfImage, i, j, nTimeSamples);
+			double fValue = access_mtx_value(pfImage, i, j, uiTimeSamples);
+
+			// secure a max of 1.0 for value
+			fValue = fValue <= 1.0 ? fValue : 1.0;
+
+			if(bInverse)
+				fValue = 1.0 - fValue;
+
 			pngImage.plot((int)i, (int)j, fValue, fValue, fValue);
+
 		}
 	}
 
 	pngImage.close();
 }
 
-void normalize(double* pfValues, unsigned int nSize)
+//! Scales a double vector so that the maximum value is set to 1.0
+void scale_to_max(double* pfValues, unsigned int nSize);
+
+void scale_to_max(double* pfValues, unsigned int nSize)
 {
 	unsigned int i;
 	double fBuffer = 0.0;
@@ -121,19 +148,28 @@ void normalize(double* pfValues, unsigned int nSize)
 	}
 }
 
+//! this scales bla bla bla, implement later
+double gaussian_adjust_intensity(double fValue)
+{
+	return exp(-square((fValue-0.5)*10.0));
+}
+
 int main(int argc, const char *argv[])
 {
-    // cout << "Hello world!" << endl;
-
     if(argc < 1)
 		return 0;
 
     unsigned int i, j, k;
-    unsigned int nTimeSamples = 800;
-    unsigned int nFrequencySamples = 480;
+    unsigned int uiTimeSamples = 800;
+    unsigned int uiFrequencySamples = 480;
+    unsigned int uiMaxChirplets = 1024;
+    BOOL bUseAmplitude = TRUE;
+    BOOL bGaussianAdjustIntensity = FALSE;
+    BOOL bInverse = TRUE;
+    BOOL bScale = TRUE;
     // unsigned int nSamplesShift = 1;
     double fTimeMin = 0.0;
-    double fTimeMax = 8.0;
+    double fTimeMax = 16.0;
 	double fFreqMin = 0.0;
     double fFreqMax = 32.0;
 
@@ -146,23 +182,33 @@ int main(int argc, const char *argv[])
 		fprintf(stdout, "Impossible to open input file.\n");
 	}
 
+	// read the file {{
+
 	CGaussianChirpletVector::iterator it;
-
-	// it = gcvector.begin();
-
 	CGaussianChirplet gchirp;
 
 	float frbuffer[4];
 	int nrbuffer[2];
 
 	// while(fscanf(pInFile, "%e %e %e %e %e %e", &gchirp.m_fAmplitude, &gchirp.m_fSigma, &gchirp.m_fCentralTime, &gchirp.m_fw, &dummy[0], &gchirp.m_fc )!=EOF)
-	while(fscanf(pInFile, "%e %d %d %e %e %e", &frbuffer[0], &nrbuffer[0], &nrbuffer[1], &frbuffer[1], &frbuffer[2], &frbuffer[3] )!=EOF)
+	for(i = 0; fscanf(pInFile, "%e %d %d %e %e %e", &frbuffer[0], &nrbuffer[0], &nrbuffer[1], &frbuffer[1], &frbuffer[2], &frbuffer[3] )!=EOF; i++)
 	{
-		gchirp.m_fSigma = ((double)nrbuffer[0])/128.0;;
+		gchirp.m_fSigma = ((double)nrbuffer[0])/128.0;
 		gchirp.m_fCentralTime = ((double)nrbuffer[1])/128.0; // is sampling 128? probably
-		gchirp.m_fAmplitude = 1.0; // lets pretend everybody is equal for tests
-		gchirp.m_fw = 128*frbuffer[1]/6.8;
-		gchirp.m_fc = 128*128*frbuffer[3]/6.8;
+
+		if(bUseAmplitude)
+		{
+			// gchirp.m_fAmplitude = sqrt(frbuffer[0]); // lets pretend everybody is equal for tests
+			gchirp.m_fAmplitude = frbuffer[0]; // lets pretend everybody is equal for tests
+		}
+		else
+		{
+			gchirp.m_fAmplitude = 1.0; // lets pretend everybody is equal for tests
+		}
+
+		gchirp.m_fw = 128*frbuffer[1]/(2*M_PI);
+		gchirp.m_fPhase = frbuffer[2];
+		gchirp.m_fc = 128*128*frbuffer[3]/(2*M_PI);
 
 		/*
 		CGaussianChirplet test_chirp;
@@ -175,46 +221,62 @@ int main(int argc, const char *argv[])
 		*/
 
 		gcvector.push_back(gchirp);
+
+		i++;
+
+		if(i >= uiMaxChirplets)
+			break;
 	}
 
 	fclose(pInFile);
 
-	// TODO: here you need to read the atoms and fill gcvector
+	// }} read the file
 
-    double *pfImage = new double[nTimeSamples*nFrequencySamples];
+	// allocate the double bitmap
+	double *pfImage = new double[uiTimeSamples*uiFrequencySamples];
 
     // reset the bitmap values
-    memset(pfImage, 0, nTimeSamples*nFrequencySamples*sizeof(double));
+    memset(pfImage, 0, uiTimeSamples*uiFrequencySamples*sizeof(double));
 
     // steps in time
-    double fTimeStep = (fTimeMax - fTimeMin)/((double)nTimeSamples);
+    double fTimeStep = (fTimeMax - fTimeMin)/((double)uiTimeSamples);
 
     // steps in frequency
-    double fFreqStep = (fFreqMax - fFreqMin)/((double)nFrequencySamples);
+    double fFreqStep = (fFreqMax - fFreqMin)/((double)uiFrequencySamples);
 
 	// gaussian chirplet loop
+	// render to the float bitmap
     for(k = 0; k < gcvector.size(); k++)
 	{
 		// time loop
-		for(i = 0; i < nTimeSamples; i++)
+		for(i = 0; i < uiTimeSamples; i++)
 		{
 			// frequency loop
-			for(j = 0; j < nFrequencySamples; j++)
+			for(j = 0; j < uiFrequencySamples; j++)
 			{
 				double fTime = ((double)i)*fTimeStep;
 				double fFreq = ((double)j)*fFreqStep;
 
 				// fTime =
 				// fFreq =
+				double fValue = gcvector[k].value2d(fTime, fFreq);
 
-				access_mtx_value(pfImage, i, j, nTimeSamples) += gcvector[k].value2d(fTime, fFreq);
+				// interesting cosmetic, just draw values around 0.5 of the max
+				// if(fNormalValue >= 0.4 && fNormalValue <= 0.6)
+
+				// access_mtx_value(pfImage, i, j, uiTimeSamples) += fValue;
+				access_mtx_value(pfImage, i, j, uiTimeSamples) += bGaussianAdjustIntensity ? gaussian_adjust_intensity(fValue) : fValue;
 			}
 		}
 	}
 
-	normalize(pfImage, nTimeSamples*nFrequencySamples);
+	// scale
+	if(bScale)
+	{
+		scale_to_max(pfImage, uiTimeSamples*uiFrequencySamples);
+	}
 
-	render_image(nTimeSamples, nFrequencySamples, pfImage, argv[2]);
+	render_image(uiTimeSamples, uiFrequencySamples, pfImage, argv[2], bInverse);
 
 	// TODO: here you need to write the bitmap
 
