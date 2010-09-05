@@ -170,7 +170,7 @@ int main(int argc, const char *argv[])
     double fSamplingFrequency = 128.0;
     double fTimeMin = 0.0;
     double fTimeMax = 16.0;
-	double fFreqMin = 16.0;
+	double fFreqMin = 0.0;
     double fFreqMax = 32.0;
     FILE* pInFile;
 
