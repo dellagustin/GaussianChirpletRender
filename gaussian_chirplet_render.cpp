@@ -167,15 +167,16 @@ int main(int argc, const char *argv[])
     BOOL bGaussianAdjustIntensity = FALSE;
     BOOL bInverse = TRUE;
     BOOL bScale = TRUE;
-    // unsigned int nSamplesShift = 1;
+    double fSamplingFrequency = 128.0;
     double fTimeMin = 0.0;
     double fTimeMax = 16.0;
-	double fFreqMin = 0.0;
+	double fFreqMin = 16.0;
     double fFreqMax = 32.0;
+    FILE* pInFile;
 
 	CGaussianChirpletVector gcvector;
 
-	FILE* pInFile = fopen(argv[1], "rt");
+	pInFile = fopen(argv[1], "rt");
 
 	if(!pInFile)
 	{
@@ -193,22 +194,22 @@ int main(int argc, const char *argv[])
 	// while(fscanf(pInFile, "%e %e %e %e %e %e", &gchirp.m_fAmplitude, &gchirp.m_fSigma, &gchirp.m_fCentralTime, &gchirp.m_fw, &dummy[0], &gchirp.m_fc )!=EOF)
 	for(i = 0; fscanf(pInFile, "%e %d %d %e %e %e", &frbuffer[0], &nrbuffer[0], &nrbuffer[1], &frbuffer[1], &frbuffer[2], &frbuffer[3] )!=EOF; i++)
 	{
-		gchirp.m_fSigma = ((double)nrbuffer[0])/128.0;
-		gchirp.m_fCentralTime = ((double)nrbuffer[1])/128.0; // is sampling 128? probably
+		gchirp.m_fSigma = ((double)nrbuffer[0])/fSamplingFrequency;
+		gchirp.m_fCentralTime = ((double)nrbuffer[1])/fSamplingFrequency; // is sampling 128? probably
 
 		if(bUseAmplitude)
 		{
 			// gchirp.m_fAmplitude = sqrt(frbuffer[0]); // lets pretend everybody is equal for tests
-			gchirp.m_fAmplitude = frbuffer[0]; // lets pretend everybody is equal for tests
+			gchirp.m_fAmplitude = sqrt(frbuffer[0]); // lets pretend everybody is equal for tests
 		}
 		else
 		{
 			gchirp.m_fAmplitude = 1.0; // lets pretend everybody is equal for tests
 		}
 
-		gchirp.m_fw = 128*frbuffer[1]/(2*M_PI);
+		gchirp.m_fw = fSamplingFrequency*frbuffer[1]/(2*M_PI);
 		gchirp.m_fPhase = frbuffer[2];
-		gchirp.m_fc = 128*128*frbuffer[3]/(2*M_PI);
+		gchirp.m_fc = fSamplingFrequency*fSamplingFrequency*frbuffer[3]/(2*M_PI);
 
 		/*
 		CGaussianChirplet test_chirp;
@@ -254,18 +255,19 @@ int main(int argc, const char *argv[])
 			// frequency loop
 			for(j = 0; j < uiFrequencySamples; j++)
 			{
-				double fTime = ((double)i)*fTimeStep;
-				double fFreq = ((double)j)*fFreqStep;
+				double fTime = fTimeMin + ((double)i)*fTimeStep;
+				double fFreq = fFreqMin + ((double)j)*fFreqStep;
 
 				// fTime =
 				// fFreq =
 				double fValue = gcvector[k].value2d(fTime, fFreq);
+				double fScaledValue = fValue / gcvector[k].m_fAmplitude;
 
 				// interesting cosmetic, just draw values around 0.5 of the max
 				// if(fNormalValue >= 0.4 && fNormalValue <= 0.6)
 
 				// access_mtx_value(pfImage, i, j, uiTimeSamples) += fValue;
-				access_mtx_value(pfImage, i, j, uiTimeSamples) += bGaussianAdjustIntensity ? gaussian_adjust_intensity(fValue) : fValue;
+				access_mtx_value(pfImage, i, j, uiTimeSamples) += bGaussianAdjustIntensity ? (bUseAmplitude ? gcvector[k].m_fAmplitude : 1.0) * gaussian_adjust_intensity(fScaledValue) : fValue;
 			}
 		}
 	}
